@@ -5,6 +5,7 @@
 #include <time.h>
 #include <string.h>
 #include <errno.h>
+#include <libgen.h>
 #include "config.h"
 #ifdef HAVE_GETOPT_H
 # include <getopt.h>
@@ -42,7 +43,7 @@ int create_sql_CREATE(px_header *header, px_fieldInfo **felder)
 	{
 		if (i > 0) printf(",\n");
 		name = quote(PXNametoQuotedName(felder[i]->name), name_quoting);
-		printf("\t%s ", name);
+		printf("\t´%s´ ", name);
 		free(name);
 
 		switch (felder[i]->type)
@@ -50,7 +51,7 @@ int create_sql_CREATE(px_header *header, px_fieldInfo **felder)
 		    case PX_Field_Type_Alpha:	printf("VARCHAR"); break;
 		    case PX_Field_Type_Date:	printf("DATE"); break;
 		    case PX_Field_Type_ShortInt:	printf("INTEGER"); break;
-		    case PX_Field_Type_LongInt:	printf("INTEGER"); break;
+		    case PX_Field_Type_LongInt:	printf("BIGINT"); break;
 		    case PX_Field_Type_Currency:	printf("DECIMAL"); break;
 		    case PX_Field_Type_Number:	printf("DOUBLE PRECISION"); break;
 		    case PX_Field_Type_MemoBLOB:	printf("TEXT"); break;
@@ -502,6 +503,45 @@ char *quote(const unsigned char *src, const unsigned int name_quoting)
 	return dst;
 }
 
+char *remove_ext (unsigned char* mystr, char dot, char sep) {
+    char *retstr, *lastdot, *lastsep;
+
+    // Error checks and allocate string.
+
+    if (mystr == NULL)
+        return NULL;
+    if ((retstr = malloc (strlen (mystr) + 1)) == NULL)
+        return NULL;
+
+    // Make a copy and find the relevant characters.
+
+    strcpy (retstr, mystr);
+    lastdot = strrchr (retstr, dot);
+    lastsep = (sep == 0) ? NULL : strrchr (retstr, sep);
+
+    // If it has an extension separator.
+
+    if (lastdot != NULL) {
+        // and it's before the extenstion separator.
+
+        if (lastsep != NULL) {
+            if (lastsep < lastdot) {
+                // then remove it.
+
+                *lastdot = '\0';
+            }
+        } else {
+            // Has extension separator with no path separator.
+
+            *lastdot = '\0';
+        }
+    }
+
+    // Return the modified string.
+
+    return retstr;
+}
+
 void display_help ()
 {
 	printf(
@@ -519,6 +559,7 @@ void display_help ()
 	       "  -q, --no_namequoting         Force name quoting deactivation\n"
 	       "  -Q, --namequoting            Force name quoting activation\n"
 	       "  -s, --no_create              Skip table creation (insert data only)\n"
+	       "  -x, --use_filename           Use filename to determine tablename\n"
 	       "  -V, --version                Output version information and exit\n"
 	       "\n"
 	       "\n", PACKAGE, VERSION);
@@ -551,6 +592,7 @@ int main ( int argc, char **argv)
 		{"filename", required_argument, 0, 'f'},
 		{"help", no_argument, 0, 'h'},
 		{"tablename", required_argument, 0, 'n'},
+		{"use_filename", no_argument, 0, 'x'},
 		{"no_namequoting", no_argument, 0, 'q'},
 		{"namequoting", no_argument, 0, 'Q'},
 		{"no_create", no_argument, 0, 's'},
@@ -560,9 +602,9 @@ int main ( int argc, char **argv)
 #endif
 	while ( 
 #ifdef HAVE_GETOPT_LONG
-		(i = getopt_long(argc, argv, "b:d:f:hn:qQsV", long_options, (int *) 0)) != EOF
+		(i = getopt_long(argc, argv, "b:d:f:hxn:qQsV", long_options, (int *) 0)) != EOF
 #else
-		(i = getopt(argc, argv, "b:d:f:hn:qQsV")) != EOF
+		(i = getopt(argc, argv, "b:d:f:hxn:qQsV")) != EOF
 #endif
 		)
 	{
@@ -585,6 +627,10 @@ int main ( int argc, char **argv)
 				exit (-1);
 			}
 			strcpy(tablename, optarg);
+			break;
+		    case 'x' :
+			settablename = 1;
+			strcpy(tablename, remove_ext(basename(filename),'.','/'));
 			break;
 		    case 'b' :
 			blobname = optarg;
